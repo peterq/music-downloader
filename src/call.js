@@ -1,98 +1,22 @@
 import Vue from 'vue'
+import download from './native/download.js'
+import {notify,addNotifyResolver,bootNotify} from  './native/notify.js'
+import socialShare from './native/socialShare.js'
+import setStatusColor from './native/setStatusColor.js'
+import toggleWebView from './native/toggleWebView.js'
 const vm = new Vue()
 var app = true
 app = window._cordovaNative?true:false;
 var booted = false
-const notifyResolver = {}
-var fileExists = function (path) {
-    window.FileEntry.createWriter(function (fileWriter) {
-
-        fileWriter.onwriteend = function() {
-            console.log("Successful file read...");
-            readFile(fileEntry);
-        };
-
-        fileWriter.onerror = function (e) {
-            console.log("Failed file read: " + e.toString());
-        };
-
-        // If we are appending data to file, go to the end of the file.
-        if (isAppend) {
-            try {
-                fileWriter.seek(fileWriter.length);
-            }
-            catch (e) {
-                console.log("file doesn't exist!");
-            }
-        }
-        fileWriter.write(dataObj);
-    });
-}
 const call = {
-    setStatusColor(color){
-        //alert(StatusBar.backgroundColorByHexString)
-        StatusBar.backgroundColorByHexString(color);
-    },
-    
-    toggleWebView(v){
-        StatusBar.overlaysWebView(v)
-    },
-    download(url,path,progress,success,errHandler){
-        const fileTransfer = new FileTransfer();
-        fileTransfer.onprogress =progressEvent =>
-            progress(progressEvent.loaded / progressEvent.total) //获取已下载和总大小的比例
-
-        fileTransfer.download( //调用对象的下载方法，开始下载
-            url,
-            cordova.file.externalRootDirectory+'leo_music/'+path,
-            function(entry) {
-                console.log("download complete: " + entry.fullPath);//下载完成后调用方法
-                success(entry)
-            },
-            function(error) {  //出错回调函数
-                alert('err',error)
-                console.log("download error source " + error.source);
-                console.log("download error target " + error.target);
-                console.log("upload error code" + error.code);
-                errHandler(error)
-            },
-            false,
-            {
-                headers: {
-
-                }
-            }
-        );
-    },
-    notify(title,text,handler,args=[],id){
-        function test(){
-            try{
-                1/0;
-            }catch (e){
-                console.log(e)
-                return false
-            }
-        }
-        id = id ||new Date().getTime()
-        plugin.notification.local.schedule(
-            {
-                id:id,
-                title : title,
-                text:text,
-                data:{handler,args},
-                at:new Date(),
-            },
-        )
-    },
-    addNotifyResolver(name,fn){
-        //return
-        notifyResolver[name] = fn
-
-    },
-    socialShare(){
-        plugins.socialsharing.share(...arguments);
-    }
+    toggleWebView,
+    setStatusColor,
+    download,
+    notify,
+    addNotifyResolver,
+    socialShare
 }
+//for in normal browser, fake methods is needed to track the native methods calls
 const fake = {}
 for (let item in call){
     fake[item] =(function () {
@@ -105,6 +29,7 @@ for (let item in call){
         }
     })();
 }
+//used to exposed, when native methods are called, agent will check if cordova plugin is correctly initialized
 const agent = {}
 for (let item in call){
     agent[item] = (function () {
@@ -121,19 +46,14 @@ for (let item in call){
 
 //boot init
 export const  native = app?agent:fake
+//the promise for booting native plugin
 export const promise = new Promise(function (resolve,reject) {
     app&&setTimeout(function () {
         var i = 0;
         const boot = function(){
             try {
                 i++
-                window.plugin.notification.local.on("click", function(notification) {
-                    //alert('call handler')
-                    const data = JSON.parse(notification.data)
-                    setTimeout(function () {
-                        notifyResolver[data.handler](...data.args)
-                    },0)
-                });
+                bootNotify()
                 plugin.backgroundMode.enable()
                 booted = true
                 resolve()
